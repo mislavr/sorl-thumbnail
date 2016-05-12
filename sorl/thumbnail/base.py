@@ -200,7 +200,8 @@ class ThumbnailBackend(object):
         Computes the destination filename.
         """
         from django.utils.text import slugify
-        key = tokey(source.name, source.key, geometry_string, serialize(options)) + "-" + slugify(source.name.split("/")[-1].split(".")[0])
+        #key = tokey(source.name, source.key, geometry_string, serialize(options)) + "-" + slugify(source.name.split("/")[-1].split(".")[0])
         # make some subdirs
-        path = '%s/%s/%s' % (key[:2], key[2:4], key)
-        return '%s%s.%s' % (settings.THUMBNAIL_PREFIX, path, EXTENSIONS[options['format']])
+        #path = '%s/%s/%s' % (key[:2], key[2:4], key)
+        #return '%s%s.%s' % (settings.THUMBNAIL_PREFIX, path, EXTENSIONS[options['format']])
+        return '%s%s/%s.%s' % (settings.THUMBNAIL_PREFIX, geometry_string, slugify(source.name.split("/")[-1].split(".")[0]), EXTENSIONS[options['format']])
