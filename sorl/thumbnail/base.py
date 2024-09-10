@@ -4,6 +4,7 @@ import logging
 import os
 import re
 
+from django.utils.text import slugify
 from sorl.thumbnail.compat import string_type, text_type
 from sorl.thumbnail.conf import settings, defaults as default_settings
 from sorl.thumbnail.helpers import tokey, serialize
@@ -199,9 +200,9 @@ class ThumbnailBackend(object):
         """
         Computes the destination filename.
         """
-        from django.utils.text import slugify
-        #key = tokey(source.name, source.key, geometry_string, serialize(options)) + "-" + slugify(source.name.split("/")[-1].split(".")[0])
-        # make some subdirs
-        #path = '%s/%s/%s' % (key[:2], key[2:4], key)
-        #return '%s%s.%s' % (settings.THUMBNAIL_PREFIX, path, EXTENSIONS[options['format']])
-        return '%s%s/%s.%s' % (settings.THUMBNAIL_PREFIX, geometry_string, slugify(source.name.split("/")[-1].split(".")[0]), EXTENSIONS[options['format']])
+        file_name = source.name.split('/')[-1]
+        if file_name.rfind('.') != -1:
+            file_name_without_ext = file_name[:file_name.rindex(".")]
+        else:
+            file_name_without_ext = file_name
+        return '%s%s/%s.%s' % (settings.THUMBNAIL_PREFIX, geometry_string, slugify(file_name_without_ext.replace('.', '-')), EXTENSIONS[options['format']])
