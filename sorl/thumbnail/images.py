@@ -1,17 +1,17 @@
-# encoding=utf-8
-
-from __future__ import unicode_literals, division
+import json
 import os
+import platform
 import re
+from urllib.error import URLError
+from urllib.parse import quote, quote_plus, urlsplit, urlunsplit
+from urllib.request import urlopen, Request
 
 from django.core.files.base import File, ContentFile
 from django.core.files.storage import Storage  # , default_storage
+from django.utils.encoding import force_str
 from django.utils.functional import LazyObject, empty
 from sorl.thumbnail import default
 from sorl.thumbnail.conf import settings
-from sorl.thumbnail.compat import (json, urlopen, urlparse, urlsplit,
-                                   quote, quote_plus,
-                                   URLError, force_unicode, encode)
 from sorl.thumbnail.default import storage as default_storage
 from sorl.thumbnail.helpers import ThumbnailError, tokey, get_module_class, deserialize
 from sorl.thumbnail.parsers import parse_geometry
@@ -43,7 +43,7 @@ def deserialize_image_file(s):
     return image_file
 
 
-class BaseImageFile(object):
+class BaseImageFile:
     size = []
 
     def exists(self):
@@ -86,7 +86,18 @@ class ImageFile(BaseImageFile):
         if hasattr(file_, 'name'):
             self.name = file_.name
         else:
-            self.name = force_unicode(file_)
+            self.name = force_str(file_)
+
+        # TODO: Add a customizable naming method as a signal
+
+        # Remove query args from names. Fixes cache and signature arguments
+        # from third party services, like Amazon S3 and signature args.
+        if settings.THUMBNAIL_REMOVE_URL_ARGS:
+            self.name = self.name.split('?')[0]
+
+        # Support for relative protocol urls
+        if self.name.startswith('//'):
+            self.name = 'http:' + self.name
 
         # figure out storage
         if storage is not None:
@@ -105,7 +116,7 @@ class ImageFile(BaseImageFile):
             if self.name.startswith(location):
                 self.name = self.name[len(location):]
 
-    def __unicode__(self):
+    def __str__(self):
         return self.name
 
     def exists(self):
@@ -127,7 +138,17 @@ class ImageFile(BaseImageFile):
             # This is the worst case scenario
             image = default.engine.get_image(self)
             size = default.engine.get_image_size(image)
+            if self.flip_dimensions(image):
+                size = list(size)
+                size.reverse()
         self._size = list(size)
+
+    def flip_dimensions(self, image):
+        """
+        Do not manipulate image, but ask engine whether we'd be doing a 90deg
+        rotation at some point.
+        """
+        return default.engine.flip_dimensions(image)
 
     @property
     def size(self):
@@ -138,7 +159,11 @@ class ImageFile(BaseImageFile):
         return self.storage.url(self.name)
 
     def read(self):
-        return self.storage.open(self.name).read()
+        f = self.storage.open(self.name)
+        try:
+            return f.read()
+        finally:
+            f.close()
 
     def write(self, content):
         if not isinstance(content, File):
@@ -189,20 +214,23 @@ class DummyImageFile(BaseImageFile):
 
 
 class UrlStorage(Storage):
-    def normalize_url(self, url, charset='utf-8'):
-        url = encode(url, charset, 'ignore')
+    def normalize_url(self, url, charset="utf-8"):
+        # Convert URL to ASCII before processing
+        url = url.encode(charset, errors="ignore")
+        url = url.decode("ascii", errors="ignore")
         scheme, netloc, path, qs, anchor = urlsplit(url)
 
-        # Encode to utf8 to prevent urllib KeyError
-        path = encode(path, charset, 'ignore')
+        path = quote(path, b"/%")
+        qs = quote_plus(qs, b":&%=")
 
-        path = quote(path, '/%')
-        qs = quote_plus(qs, ':&%=')
-
-        return urlparse.urlunsplit((scheme, netloc, path, qs, anchor))
+        return urlunsplit((scheme, netloc, path, qs, anchor))
 
     def open(self, name, mode='rb'):
-        return urlopen(self.normalize_url(name))
+        url = self.normalize_url(name)
+        python_version = platform.python_version_tuple()[0]
+        user_agent = "python-urllib{python_version}/0.6".format(python_version=python_version)
+        req = Request(url, headers={"User-Agent": user_agent})
+        return urlopen(req, timeout=settings.THUMBNAIL_URL_TIMEOUT)
 
     def exists(self, name):
         try:
@@ -220,7 +248,7 @@ class UrlStorage(Storage):
 
 def delete_all_thumbnails():
     storage = default.storage
-    path = os.path.join(storage.location, settings.THUMBNAIL_PREFIX)
+    path = settings.THUMBNAIL_PREFIX
 
     def walk(path):
         dirs, files = storage.listdir(path)

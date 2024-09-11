@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import os
 import re
 from subprocess import Popen, PIPE
@@ -6,12 +5,13 @@ from PIL import Image
 
 from django.template.loader import render_to_string
 from django.test import Client, TestCase
+from django.test.utils import override_settings
 import pytest
 
 from sorl.thumbnail.conf import settings
 from sorl.thumbnail.engines.pil_engine import Engine as PILEngine
 from .models import Item
-from .utils import BaseTestCase, override_custom_settings, DATA_DIR
+from .utils import BaseTestCase, DATA_DIR
 
 
 pytestmark = pytest.mark.django_db
@@ -37,7 +37,7 @@ class TemplateTestCaseA(BaseTestCase):
     def test_serialization_options(self):
         item = Item.objects.get(image='500x500.jpg')
 
-        for j in range(0, 20):
+        for _ in range(0, 20):
             # we could be lucky...
             val0 = render_to_string('thumbnail7.html', {
                 'item': item,
@@ -65,6 +65,7 @@ class TemplateTestCaseA(BaseTestCase):
         p = Popen(['identify', '-verbose', path], stdout=PIPE)
         p.wait()
         m = re.search('Interlace: JPEG', str(p.stdout.read()))
+        p.stdout.close()
         self.assertEqual(bool(m), True)
 
     def test_nonprogressive(self):
@@ -74,6 +75,7 @@ class TemplateTestCaseA(BaseTestCase):
         p = Popen(['identify', '-verbose', path], stdout=PIPE)
         p.wait()
         m = re.search('Interlace: None', str(p.stdout.read()))
+        p.stdout.close()
         self.assertEqual(bool(m), True)
 
     def test_orientation(self):
@@ -108,7 +110,9 @@ class TemplateTestCaseA(BaseTestCase):
             self.assertLess(epsilon(left, im.getpixel((7, 14))), 10)
             exif = im._getexif()
 
-            if exif:
+            # no exif editor in GraphicsMagick
+            if exif and not (settings.THUMBNAIL_CONVERT.endswith('gm convert') or
+                             'pgmagick_engine' in settings.THUMBNAIL_ENGINE):
                 self.assertEqual(exif.get(0x0112), 1)
 
 
@@ -133,7 +137,7 @@ class TemplateTestCaseB(BaseTestCase):
 
 class TemplateTestCaseClient(TestCase):
     def test_empty_error(self):
-        with override_custom_settings(settings, THUMBNAIL_DEBUG=False):
+        with override_settings(THUMBNAIL_DEBUG=False):
             from django.core.mail import outbox
 
             client = Client()
@@ -144,3 +148,69 @@ class TemplateTestCaseClient(TestCase):
             end = outbox[0].body.split('\n\n')[-2].split(':')[1].strip()
 
             self.assertEqual(end, '[Errno 2] No such file or directory')
+
+
+class TemplateTestCaseTemplateTagAlias(BaseTestCase):
+    """Testing alternative template tag (alias)."""
+
+    def test_model(self):
+        item = Item.objects.get(image='500x500.jpg')
+        val = render_to_string(
+            'thumbnail1_alias.html', {'item': item}
+        ).strip()
+        self.assertEqual(
+            val,
+            '<img style="margin:0px 0px 0px 0px" width="200" height="100">'
+        )
+        val = render_to_string(
+            'thumbnail2_alias.html', {'item': item}
+        ).strip()
+        self.assertEqual(
+            val,
+            '<img style="margin:0px 50px 0px 50px" width="100" height="100">'
+        )
+
+    def test_nested(self):
+        item = Item.objects.get(image='500x500.jpg')
+        val = render_to_string(
+            'thumbnail6_alias.html', {'item': item}
+        ).strip()
+        self.assertEqual(
+            val,
+            (
+                '<a href="/media/test/cache/fc/f6/'
+                'fcf65c09cc4bb8671147de41997422bf.jpg">'
+                '<img src="/media/test/cache/67/6b/'
+                '676b2331a071478b0cb280d0edba7818.jpg" '
+                'width="400" height="400"></a>'
+            )
+        )
+
+    def test_serialization_options(self):
+        item = Item.objects.get(image='500x500.jpg')
+
+        for _ in range(0, 20):
+            # we could be lucky...
+            val0 = render_to_string('thumbnail7_alias.html', {
+                'item': item,
+            }).strip()
+            val1 = render_to_string('thumbnail7a_alias.html', {
+                'item': item,
+            }).strip()
+            self.assertEqual(val0, val1)
+
+    def test_options(self):
+        item = Item.objects.get(image='500x500.jpg')
+        options = {
+            'crop': "center",
+            'upscale': True,
+            'quality': 77,
+        }
+        val0 = render_to_string(
+            'thumbnail8_alias.html',
+            {'item': item, 'options': options}
+        ).strip()
+        val1 = render_to_string(
+            'thumbnail8a_alias.html', {'item': item}
+        ).strip()
+        self.assertEqual(val0, val1)

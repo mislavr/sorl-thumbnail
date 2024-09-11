@@ -1,5 +1,3 @@
-from __future__ import unicode_literals
-
 import redis
 from sorl.thumbnail.kvstores.base import KVStoreBase
 from sorl.thumbnail.conf import settings
@@ -7,7 +5,7 @@ from sorl.thumbnail.conf import settings
 
 class KVStore(KVStoreBase):
     def __init__(self):
-        super(KVStore, self).__init__()
+        super().__init__()
 
         if hasattr(settings, 'THUMBNAIL_REDIS_URL'):
             self.connection = redis.from_url(settings.THUMBNAIL_REDIS_URL)
@@ -16,6 +14,7 @@ class KVStore(KVStoreBase):
                 host=settings.THUMBNAIL_REDIS_HOST,
                 port=settings.THUMBNAIL_REDIS_PORT,
                 db=settings.THUMBNAIL_REDIS_DB,
+                ssl=settings.THUMBNAIL_REDIS_SSL,
                 password=settings.THUMBNAIL_REDIS_PASSWORD,
                 unix_socket_path=settings.THUMBNAIL_REDIS_UNIX_SOCKET_PATH,
             )
@@ -24,7 +23,8 @@ class KVStore(KVStoreBase):
         return self.connection.get(key)
 
     def _set_raw(self, key, value):
-        return self.connection.set(key, value)
+        return self.connection.set(
+            key, value, ex=settings.THUMBNAIL_REDIS_TIMEOUT)
 
     def _delete_raw(self, *keys):
         return self.connection.delete(*keys)

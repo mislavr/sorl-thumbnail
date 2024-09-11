@@ -1,15 +1,39 @@
-from __future__ import unicode_literals, division
+from io import BytesIO
 
-import math
 from sorl.thumbnail.engines.base import EngineBase
-from sorl.thumbnail.compat import BufferIO
 
 try:
-    from PIL import Image, ImageFile, ImageDraw, ImageFilter
+    from PIL import Image, ImageFile, ImageDraw, ImageFilter, ImageMode
 except ImportError:
     import Image
     import ImageFile
     import ImageDraw
+    import ImageMode
+
+EXIF_ORIENTATION = 0x0112
+
+
+def color_count(image):
+    """ Return the number of color values in the input image --
+        this is the number of pixels times the band count
+        of the image.
+    """
+    mode_descriptor = ImageMode.getmode(image.mode)
+    width, height = image.size
+    return width * height * len(mode_descriptor.bands)
+
+
+def histogram_entropy_py(image):
+    """ Calculate the entropy of an images' histogram. """
+    from math import log2, fsum
+    histosum = float(color_count(image))
+    histonorm = (histocol / histosum for histocol in image.histogram())
+    return -fsum(p * log2(p) for p in histonorm if p != 0.0)
+
+
+# Select the Pillow native histogram entropy function - if
+# available - and fall back to the Python implementation:
+histogram_entropy = getattr(Image.Image, 'entropy', histogram_entropy_py)
 
 
 def round_corner(radius, fill):
@@ -45,7 +69,7 @@ class GaussianBlur(ImageFilter.Filter):
 
 class Engine(EngineBase):
     def get_image(self, source):
-        buffer = BufferIO(source.read())
+        buffer = BytesIO(source.read())
         return Image.open(buffer)
 
     def get_image_size(self, image):
@@ -55,7 +79,7 @@ class Engine(EngineBase):
         return image.info or {}
 
     def is_valid_image(self, raw_data):
-        buffer = BufferIO(raw_data)
+        buffer = BytesIO(raw_data)
         try:
             trial_image = Image.open(buffer)
             trial_image.verify()
@@ -63,18 +87,33 @@ class Engine(EngineBase):
             return False
         return True
 
+    def colorspace(self, image, geometry, options):
+        """
+        Wrapper for ``_colorspace``
+        """
+        colorspace = options['colorspace']
+        format = options['format']
+
+        return self._colorspace(image, colorspace, format)
+
     def _cropbox(self, image, x, y, x2, y2):
         return image.crop((x, y, x2, y2))
 
-    def _orientation(self, image):
+    def _get_exif_orientation(self, image):
         try:
             exif = image._getexif()
-        except:
+        except Exception:
             exif = None
 
         if exif:
-            orientation = exif.get(0x0112)
+            return exif.get(EXIF_ORIENTATION)
+        else:
+            return None
 
+    def _orientation(self, image):
+        orientation = self._get_exif_orientation(image)
+
+        if orientation:
             if orientation == 2:
                 image = image.transpose(Image.FLIP_LEFT_RIGHT)
             elif orientation == 3:
@@ -82,25 +121,32 @@ class Engine(EngineBase):
             elif orientation == 4:
                 image = image.transpose(Image.FLIP_TOP_BOTTOM)
             elif orientation == 5:
-                image = image.rotate(-90).transpose(Image.FLIP_LEFT_RIGHT)
+                image = image.rotate(-90, expand=1).transpose(Image.FLIP_LEFT_RIGHT)
             elif orientation == 6:
-                image = image.rotate(-90)
+                image = image.rotate(-90, expand=1)
             elif orientation == 7:
-                image = image.rotate(90).transpose(Image.FLIP_LEFT_RIGHT)
+                image = image.rotate(90, expand=1).transpose(Image.FLIP_LEFT_RIGHT)
             elif orientation == 8:
-                image = image.rotate(90)
+                image = image.rotate(90, expand=1)
 
         return image
 
-    def _colorspace(self, image, colorspace):
+    def _flip_dimensions(self, image):
+        orientation = self._get_exif_orientation(image)
+        return orientation and orientation in [5, 6, 7, 8]
+
+    def _colorspace(self, image, colorspace, format):
         if colorspace == 'RGB':
-            if image.mode == 'RGBA':
+            # Pillow JPEG doesn't allow RGBA anymore. It was converted to RGB before.
+            if image.mode == 'RGBA' and format != 'JPEG':
                 return image  # RGBA is just RGB + Alpha
-            if image.mode == 'LA' or (image.mode == 'P' and 'transparency' in image.info):
+            if image.mode == 'LA' or (
+                image.mode == 'P' and 'transparency' in image.info and format != 'JPEG'
+            ):
                 newimage = image.convert('RGBA')
                 transparency = image.info.get('transparency')
                 if transparency is not None:
-                    mask = Image.new('L', image.size, color=transparency)
+                    mask = image.convert('RGBA').split()[-1]
                     newimage.putalpha(mask)
                 return newimage
             return image.convert('RGB')
@@ -180,6 +226,9 @@ class Engine(EngineBase):
 
         return image
 
+    # Add the histogram_entropy fumnction as a static method:
+    _get_image_entropy = staticmethod(histogram_entropy)
+
     def _scale(self, image, width, height):
         return image.resize((width, height), resample=Image.ANTIALIAS)
 
@@ -207,7 +256,7 @@ class Engine(EngineBase):
     def _get_raw_data(self, image, format_, quality, image_info=None, progressive=False):
         # Increase (but never decrease) PIL buffer size
         ImageFile.MAXBLOCK = max(ImageFile.MAXBLOCK, image.size[0] * image.size[1])
-        bf = BufferIO()
+        bf = BytesIO()
 
         params = {
             'format': format_,
@@ -227,7 +276,7 @@ class Engine(EngineBase):
             # Do not save unnecessary exif data for smaller thumbnail size
             params.pop('exif', {})
             image.save(bf, **params)
-        except (IOError, OSError):
+        except OSError:
             # Try without optimization.
             params.pop('optimize')
             image.save(bf, **params)
@@ -237,10 +286,3 @@ class Engine(EngineBase):
             bf.close()
 
         return raw_data
-
-    def _get_image_entropy(self, image):
-        """calculate the entropy of an image"""
-        hist = image.histogram()
-        hist_size = sum(hist)
-        hist = [float(h) / hist_size for h in hist]
-        return -sum([p * math.log(p, 2) for p in hist if p != 0])

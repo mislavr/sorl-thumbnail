@@ -1,4 +1,3 @@
-from __future__ import unicode_literals
 import logging
 
 from django import forms
@@ -22,8 +21,8 @@ class AdminImageWidget(forms.ClearableFileInput):
     )
     template_with_clear = '<label>%(clear_checkbox_label)s: %(clear)s</label>'
 
-    def render(self, name, value, attrs=None):
-        output = super(AdminImageWidget, self).render(name, value, attrs)
+    def render(self, name, value, attrs=None, **kwargs):
+        output = super().render(name, value, attrs, **kwargs)
         if value and hasattr(value, 'url'):
             ext = 'JPEG'
             try:
@@ -32,12 +31,12 @@ class AdminImageWidget(forms.ClearableFileInput):
                     ext = 'PNG'
                 elif aux_ext[len(aux_ext) - 1].lower() == 'gif':
                     ext = 'GIF'
-            except:
+            except Exception:
                 pass
             try:
                 mini = get_thumbnail(value, 'x80', upscale=False, format=ext)
             except Exception as e:
-                logger.warn("Unable to get the thumbnail", exc_info=e)
+                logger.warning("Unable to get the thumbnail", exc_info=e)
             else:
                 try:
                     output = (
@@ -46,19 +45,18 @@ class AdminImageWidget(forms.ClearableFileInput):
                         'target="_blank" href="%s">'
                         '<img src="%s"></a>%s</div>'
                     ) % (mini.width, value.url, mini.url, output)
-                except AttributeError:
+                except (AttributeError, TypeError):
                     pass
         return mark_safe(output)
 
 
-class AdminImageMixin(object):
+class AdminImageMixin:
     """
     This is a mix-in for InlineModelAdmin subclasses to make ``ImageField``
     show nicer form widget
     """
 
-    def formfield_for_dbfield(self, db_field, **kwargs):
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
         if isinstance(db_field, ImageField):
             return db_field.formfield(widget=AdminImageWidget)
-        sup = super(AdminImageMixin, self)
-        return sup.formfield_for_dbfield(db_field, **kwargs)
+        return super().formfield_for_dbfield(db_field, request, **kwargs)

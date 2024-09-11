@@ -1,6 +1,3 @@
-# encoding=utf-8
-
-from __future__ import unicode_literals
 import decimal
 import logging
 import sys
@@ -16,7 +13,6 @@ from sorl.thumbnail.conf import settings as sorl_settings
 from sorl.thumbnail import default
 from sorl.thumbnail.images import ImageFile, DummyImageFile
 from sorl.thumbnail.parsers import parse_geometry
-from sorl.thumbnail.compat import text_type
 from sorl.thumbnail.shortcuts import get_thumbnail
 
 
@@ -39,7 +35,7 @@ def safe_filter(error_output=''):
             except Exception as err:
                 if sorl_settings.THUMBNAIL_DEBUG:
                     raise
-                logger.error('Thumbnail filter failed: %s' % err.message,
+                logger.error('Thumbnail filter failed: %s' % str(err),
                              exc_info=sys.exc_info())
                 return error_output
 
@@ -64,7 +60,7 @@ class ThumbnailNodeBase(Node):
 
             error_message = 'Thumbnail tag failed'
 
-            if settings.TEMPLATE_DEBUG:
+            if context.template.engine.debug:
                 try:
                     error_message_template = (
                         "Thumbnail tag failed "
@@ -129,13 +125,17 @@ class ThumbnailNode(ThumbnailNodeBase):
         options = {}
         for key, expr in self.options:
             noresolve = {'True': True, 'False': False, 'None': None}
-            value = noresolve.get(text_type(expr), expr.resolve(context))
+            value = noresolve.get(str(expr), expr.resolve(context))
             if key == 'options':
                 options.update(value)
             else:
                 options[key] = value
 
-        thumbnail = get_thumbnail(file_, geometry, **options)
+        thumbnail = None
+        if file_:
+            thumbnail = get_thumbnail(file_, geometry, **options)
+        elif sorl_settings.THUMBNAIL_DUMMY:
+            thumbnail = DummyImageFile(geometry)
 
         if not thumbnail or (isinstance(thumbnail, DummyImageFile) and self.nodelist_empty):
             if self.nodelist_empty:
@@ -262,8 +262,8 @@ def text_filter(regex_base, value):
     Helper method to regex replace images with captions in different markups
     """
     regex = regex_base % {
-        're_cap': '[a-zA-Z0-9\.\,:;/_ \(\)\-\!\?\"]+',
-        're_img': '[a-zA-Z0-9\.:/_\-\% ]+'
+        're_cap': r'[a-zA-Z0-9\.\,:;/_ \(\)\-\!\?"]+',
+        're_img': r'[a-zA-Z0-9\.:/_\-\% ]+'
     }
     images = re.findall(regex, value)
 
@@ -281,10 +281,10 @@ def text_filter(regex_base, value):
 @safe_filter(error_output='auto')
 @register.filter
 def markdown_thumbnails(value):
-    return text_filter('!\[(%(re_cap)s)?\][ ]?\((%(re_img)s)\)', value)
+    return text_filter(r'!\[(%(re_cap)s)?\][ ]?\((%(re_img)s)\)', value)
 
 
 @safe_filter(error_output='auto')
 @register.filter
 def html_thumbnails(value):
-    return text_filter('<img(?: alt="(%(re_cap)s)?")? src="(%(re_img)s)"', value)
+    return text_filter(r'<img(?: alt="(%(re_cap)s)?")? src="(%(re_img)s)"', value)

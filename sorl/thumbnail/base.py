@@ -1,13 +1,9 @@
-from __future__ import unicode_literals
-
 import logging
 import os
 import re
 
 from django.utils.text import slugify
-from sorl.thumbnail.compat import string_type, text_type
 from sorl.thumbnail.conf import settings, defaults as default_settings
-from sorl.thumbnail.helpers import tokey, serialize
 from sorl.thumbnail.images import ImageFile, DummyImageFile
 from sorl.thumbnail import default
 from sorl.thumbnail.parsers import parse_geometry
@@ -19,10 +15,11 @@ EXTENSIONS = {
     'JPEG': 'jpg',
     'PNG': 'png',
     'GIF': 'gif',
+    'WEBP': 'webp',
 }
 
 
-class ThumbnailBackend(object):
+class ThumbnailBackend:
     """
     The main class for sorl-thumbnail, you can subclass this if you for example
     want to change the way destination filename is generated.
@@ -58,6 +55,8 @@ class ThumbnailBackend(object):
             return 'PNG'
         elif file_extension == '.gif':
             return 'GIF'
+        elif file_extension == '.webp':
+            return 'WEBP'
         else:
             from django.conf import settings
 
@@ -69,14 +68,12 @@ class ThumbnailBackend(object):
         options given. First it will try to get it from the key value store,
         secondly it will create it.
         """
-        logger.debug(text_type('Getting thumbnail for file [%s] at [%s]'), file_, geometry_string)
+        logger.debug('Getting thumbnail for file [%s] at [%s]', file_, geometry_string)
 
         if file_:
             source = ImageFile(file_)
-        elif settings.THUMBNAIL_DUMMY:
-            return DummyImageFile(geometry_string)
         else:
-            return None
+            raise ValueError('falsey file_ argument in get_thumbnail()')
 
         # preserve image filetype
         if settings.THUMBNAIL_PRESERVE_FORMAT:
@@ -105,17 +102,18 @@ class ThumbnailBackend(object):
         if settings.THUMBNAIL_FORCE_OVERWRITE or not thumbnail.exists():
             try:
                 source_image = default.engine.get_image(source)
-            except IOError as e:
+            except Exception as e:
                 logger.exception(e)
                 if settings.THUMBNAIL_DUMMY:
                     return DummyImageFile(geometry_string)
                 else:
-                    # if S3Storage says file doesn't exist remotely, don't try to
-                    # create it and exit early.
+                    # if storage backend says file doesn't exist remotely,
+                    # don't try to create it and exit early.
                     # Will return working empty image type; 404'd image
-                    logger.warn(text_type('Remote file [%s] at [%s] does not exist'),
-                                file_, geometry_string)
-
+                    logger.warning(
+                        'Remote file [%s] at [%s] does not exist',
+                        file_, geometry_string,
+                    )
                     return thumbnail
 
             # We might as well set the size since we have the image in memory
@@ -154,7 +152,7 @@ class ThumbnailBackend(object):
         """
         Creates the thumbnail by using default.engine
         """
-        logger.debug(text_type('Creating thumbnail file [%s] at [%s] with [%s]'),
+        logger.debug('Creating thumbnail file [%s] at [%s] with [%s]',
                      thumbnail.name, geometry_string, options)
         ratio = default.engine.get_image_ratio(source_image, options)
         geometry = parse_geometry(geometry_string, ratio)
@@ -177,10 +175,10 @@ class ThumbnailBackend(object):
         for resolution in settings.THUMBNAIL_ALTERNATIVE_RESOLUTIONS:
             resolution_geometry = (int(geometry[0] * resolution), int(geometry[1] * resolution))
             resolution_options = options.copy()
-            if 'crop' in options and isinstance(options['crop'], string_type):
+            if 'crop' in options and isinstance(options['crop'], str):
                 crop = options['crop'].split(" ")
                 for i in range(len(crop)):
-                    s = re.match("(\d+)px", crop[i])
+                    s = re.match(r"(\d+)px", crop[i])
                     if s:
                         crop[i] = "%spx" % int(int(s.group(1)) * resolution)
                 resolution_options['crop'] = " ".join(crop)

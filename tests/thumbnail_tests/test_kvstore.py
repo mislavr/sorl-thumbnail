@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import threading
 import unittest
 
@@ -14,7 +13,7 @@ class KVStoreTestCase(unittest.TestCase):
         def thread_cache_backend():
             cache_backends.append(kv.cache)
 
-        for x in range(2):
+        for _ in range(2):
             t = threading.Thread(target=thread_cache_backend)
             t.start()
             t.join()

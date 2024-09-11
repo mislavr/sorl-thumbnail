@@ -1,9 +1,9 @@
 '''
 Wand (>=v0.3.0) engine for Sorl-thumbnail
 '''
-from __future__ import unicode_literals
 
 from wand.image import Image
+from wand.version import MAGICK_VERSION_NUMBER
 from wand import exceptions
 from sorl.thumbnail.engines.base import EngineBase
 
@@ -48,15 +48,24 @@ class Engine(EngineBase):
         image.orientation = 'top_left'
         return image
 
+    def _flip_dimensions(self, image):
+        return image.orientation in ['left_top', 'right_top', 'right_bottom', 'left_bottom']
+
     def _colorspace(self, image, colorspace):
         if colorspace == 'RGB':
             if image.alpha_channel:
-                image.type = 'truecolormatte'
+                if MAGICK_VERSION_NUMBER < 0x700:
+                    image.type = 'truecolormatte'
+                else:
+                    image.type = 'truecoloralpha'
             else:
                 image.type = 'truecolor'
         elif colorspace == 'GRAY':
             if image.alpha_channel:
-                image.type = 'grayscalematte'
+                if MAGICK_VERSION_NUMBER < 0x700:
+                    image.type = 'grayscalematte'
+                else:
+                    image.type = 'grayscalealpha'
             else:
                 image.type = 'grayscale'
         else:
@@ -68,11 +77,17 @@ class Engine(EngineBase):
         return image
 
     def _crop(self, image, width, height, x_offset, y_offset):
-        image.crop(x_offset, y_offset, width=width, height=height)
+        image.crop(left=x_offset, top=y_offset, width=width, height=height)
+        return image
+
+    def _cropbox(self, image, x, y, x2, y2):
+        image.crop(left=x, top=y, width=x2 - x, height=y2 - y)
         return image
 
     def _get_raw_data(self, image, format_, quality, image_info=None, progressive=False):
         image.compression_quality = quality
         if format_ == 'JPEG' and progressive:
             image.format = 'pjpeg'
+        else:
+            image.format = format_
         return image.make_blob()

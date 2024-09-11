@@ -1,13 +1,10 @@
-# coding=utf-8
-from __future__ import division
-
 from sorl.thumbnail.conf import settings
 from sorl.thumbnail.helpers import toint
 from sorl.thumbnail.parsers import parse_crop
 from sorl.thumbnail.parsers import parse_cropbox
 
 
-class EngineBase(object):
+class EngineBase:
     """
     ABC for Thumbnail engines, methods are static
     """
@@ -43,7 +40,15 @@ class EngineBase(object):
         """
         if options.get('orientation', settings.THUMBNAIL_ORIENTATION):
             return self._orientation(image)
+        self.reoriented = True
         return image
+
+    def flip_dimensions(self, image, geometry=None, options=None):
+        options = options or {}
+        reoriented = hasattr(self, 'reoriented')
+        if options.get('orientation', settings.THUMBNAIL_ORIENTATION) and not reoriented:
+            return self._flip_dimensions(image)
+        return False
 
     def colorspace(self, image, geometry, options):
         """
@@ -71,6 +76,8 @@ class EngineBase(object):
         """
         upscale = options['upscale']
         x_image, y_image = map(float, self.get_image_size(image))
+        if self.flip_dimensions(image):
+            x_image, y_image = y_image, x_image
         factor = self._calculate_scaling_factor(x_image, y_image, geometry, options)
 
         if factor < 1 or upscale:
@@ -158,7 +165,12 @@ class EngineBase(object):
         else:
             x, y = self.get_image_size(image)
 
-        return float(x) / y
+        ratio = float(x) / y
+
+        if self.flip_dimensions(image):
+            ratio = 1.0 / ratio
+
+        return ratio
 
     def get_image_info(self, image):
         """
