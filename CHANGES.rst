@@ -2,6 +2,28 @@
 Changes
 =======
 
+Unreleased
+==========
+* Deprecated ``THUMBNAIL_KVSTORE``. Only the Django cache-based store will be
+  used in a future version.
+* Add support for Django 5.0 and 5.1
+* Drop support for Django 3.2, 4.0 and 4.1
+
+12.10.0
+=======
+* Fixed safe_filter application on various thumbnail template tags.
+* Fixed slow performance with external storages like S3.
+* Added support for Django 4.2.
+* Drop support for Python 3.7.
+* Confirmed Python 3.11 support.
+
+12.9.0
+======
+* Drop support for Django 2.2 and 3.1.
+* Added support for Django 4.1.
+* Drop support for Python 3.6.
+* Fixed various Pillow deprecation warnings.
+
 12.8.0
 ======
 * Drop support for Django 3.0.

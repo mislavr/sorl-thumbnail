@@ -1,26 +1,23 @@
 import os
 import platform
 import unittest
-from subprocess import Popen, PIPE
+from subprocess import PIPE, Popen
 
-import pytest
-from PIL import Image
 from django.core.files.storage import default_storage
 from django.template.loader import render_to_string
+from PIL import Image
 
 from sorl.thumbnail import default
 from sorl.thumbnail.base import ThumbnailBackend
 from sorl.thumbnail.conf import settings
+from sorl.thumbnail.engines.pil_engine import Engine as PILEngine
 from sorl.thumbnail.helpers import get_module_class
 from sorl.thumbnail.images import ImageFile
 from sorl.thumbnail.parsers import parse_geometry
 from sorl.thumbnail.templatetags.thumbnail import margin
-from sorl.thumbnail.engines.pil_engine import Engine as PILEngine
+
 from .models import Item
 from .utils import BaseTestCase
-
-
-pytestmark = pytest.mark.django_db
 
 
 class SimpleTestCase(BaseTestCase):
@@ -196,7 +193,7 @@ class SimpleTestCase(BaseTestCase):
             default.kvstore.get(im).serialize_storage(),
             'tests.thumbnail_tests.storage.TestStorage',
         )
-        im = ImageFile('http://dummyimage.com/300x300/')
+        im = ImageFile('https://dummyimage.com/300x300/')
         default.kvstore.set(im)
         self.assertEqual(
             default.kvstore.get(im).serialize_storage(),
@@ -550,10 +547,10 @@ class DummyTestCase(unittest.TestCase):
         val = render_to_string('thumbnaild2.html', {'anything': None, }).strip()
         self.assertEqual(
             val,
-            '<img src="http://dummyimage.com/300x200" width="300" height="200"><p>NOT</p>'
+            '<img src="https://dummyimage.com/300x200" width="300" height="200"><p>NOT</p>'
         )
         val = render_to_string('thumbnaild3.html', {}).strip()
-        self.assertEqual(val, '<img src="http://dummyimage.com/600x400" width="600" height="400">')
+        self.assertEqual(val, '<img src="https://dummyimage.com/600x400" width="600" height="400">')
 
         settings.THUMBNAIL_DUMMY = False
 
@@ -563,9 +560,9 @@ class DummyTestCase(unittest.TestCase):
         val = render_to_string('thumbnaild4.html', {}).strip()
         self.assertEqual(
             val,
-            '<img src="http://dummyimage.com/600x400" width="600" '
-            'height="400" srcset="http://dummyimage.com/1200x800 2x; '
-            'http://dummyimage.com/900x600 1.5x">'
+            '<img src="https://dummyimage.com/600x400" width="600" '
+            'height="400" srcset="https://dummyimage.com/1200x800 2x; '
+            'https://dummyimage.com/900x600 1.5x">'
         )
 
 

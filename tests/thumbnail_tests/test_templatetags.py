@@ -1,20 +1,17 @@
 import os
 import re
-from subprocess import Popen, PIPE
-from PIL import Image
+from subprocess import PIPE, Popen
 
 from django.template.loader import render_to_string
 from django.test import Client, TestCase
 from django.test.utils import override_settings
-import pytest
+from PIL import Image
 
 from sorl.thumbnail.conf import settings
 from sorl.thumbnail.engines.pil_engine import Engine as PILEngine
+
 from .models import Item
-from .utils import BaseTestCase, DATA_DIR
-
-
-pytestmark = pytest.mark.django_db
+from .utils import DATA_DIR, BaseTestCase
 
 
 class TemplateTestCaseA(BaseTestCase):
@@ -111,8 +108,10 @@ class TemplateTestCaseA(BaseTestCase):
             exif = im._getexif()
 
             # no exif editor in GraphicsMagick
-            if exif and not (settings.THUMBNAIL_CONVERT.endswith('gm convert') or
-                             'pgmagick_engine' in settings.THUMBNAIL_ENGINE):
+            if exif and not (
+                settings.THUMBNAIL_CONVERT.endswith('gm convert')
+                or 'pgmagick_engine' in settings.THUMBNAIL_ENGINE
+            ):
                 self.assertEqual(exif.get(0x0112), 1)
 
 
@@ -123,12 +122,30 @@ class TemplateTestCaseB(BaseTestCase):
 
     def test_portrait(self):
         val = render_to_string('thumbnail4.html', {
-            'source': 'http://dummyimage.com/120x100/',
+            'source': 'https://dummyimage.com/120x100/',
             'dims': 'x66',
         }).strip()
         self.assertEqual(val,
-                         '<img src="/media/test/cache/7b/cd/7bcd20922c6750649f431df7c3cdbc5e.jpg" '
+                         '<img src="/media/test/cache/82/62/8262858c5f95f2bd7715d7aaa3e52b11.jpg" '
                          'width="79" height="66" class="landscape">')
+
+        val = render_to_string('thumbnail4.html', {
+            'source': 'https://dummyimage.com/100x120/',
+            'dims': 'x66',
+        }).strip()
+        self.assertEqual(val, '<img width="1" height="1" class="portrait">')
+
+        with override_settings(THUMBNAIL_DEBUG=True):
+            with self.assertRaises(FileNotFoundError):
+                render_to_string('thumbnail4a.html', {
+                    'source': 'broken.jpeg',
+                }).strip()
+
+        with override_settings(THUMBNAIL_DEBUG=False):
+            val = render_to_string('thumbnail4a.html', {
+                'source': 'broken.jpeg',
+            }).strip()
+            self.assertEqual(val, 'no')
 
     def test_empty(self):
         val = render_to_string('thumbnail5.html', {}).strip()

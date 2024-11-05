@@ -13,7 +13,12 @@ THUMBNAIL_LOG_HANDLER = {
 }
 THUMBNAIL_KVSTORE = 'tests.thumbnail_tests.kvstore.TestKVStore'
 THUMBNAIL_STORAGE = 'tests.thumbnail_tests.storage.TestStorage'
-DEFAULT_FILE_STORAGE = 'tests.thumbnail_tests.storage.TestStorage'
+STORAGES = {
+    "default": {
+        "BACKEND": "tests.thumbnail_tests.storage.TestStorage",
+    },
+}
+
 ADMINS = (
     ('Sorl', 'thumbnail@sorl.net'),
 )
@@ -23,6 +28,7 @@ DATABASES = {
         'NAME': ':memory:',
     }
 }
+DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 MEDIA_ROOT = pjoin(PROJ_ROOT, 'media')
 MEDIA_URL = '/media/'
 ROOT_URLCONF = 'tests.thumbnail_tests.urls'
