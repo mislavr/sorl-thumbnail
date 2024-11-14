@@ -1,13 +1,11 @@
 import unittest
-import pytest
 
-from sorl.thumbnail import get_thumbnail, default
+from django.test.utils import override_settings
+
+from sorl.thumbnail import default, get_thumbnail
 from sorl.thumbnail.helpers import get_module_class
 
 from .utils import BaseStorageTestCase
-
-
-pytestmark = pytest.mark.django_db
 
 
 class StorageTestCase(BaseStorageTestCase):
@@ -40,6 +38,11 @@ class StorageTestCase(BaseStorageTestCase):
         self.assertIsNotNone(im.x)
         self.assertIsNotNone(im.y)
         self.assertEqual(self.log, [])
+
+    @override_settings(THUMBNAIL_STORAGE="tests.thumbnail_tests.storage.TestStorage")
+    def test_storage_setting_as_path_to_class(self):
+        storage = default.Storage()
+        self.assertEqual(storage.__class__.__name__, "TestStorage")
 
 
 class UrlStorageTestCase(unittest.TestCase):

@@ -1,7 +1,6 @@
 from sorl.thumbnail.conf import settings
 from sorl.thumbnail.helpers import toint
-from sorl.thumbnail.parsers import parse_crop
-from sorl.thumbnail.parsers import parse_cropbox
+from sorl.thumbnail.parsers import parse_crop, parse_cropbox
 
 
 class EngineBase:
@@ -119,8 +118,11 @@ class EngineBase:
         """
         Wrapper for ``_blur``
         """
-        if options.get('blur'):
-            return self._blur(image, int(options.get('blur')))
+        radius = options.get('blur')
+        if radius:
+            if isinstance(radius, str):
+                radius = int(radius)
+            return self._blur(image, radius)
         return image
 
     def padding(self, image, geometry, options):

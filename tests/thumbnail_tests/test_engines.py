@@ -1,26 +1,23 @@
 import os
 import platform
 import unittest
-from subprocess import Popen, PIPE
+from subprocess import PIPE, Popen
 
-import pytest
-from PIL import Image
 from django.core.files.storage import default_storage
 from django.template.loader import render_to_string
+from PIL import Image
 
 from sorl.thumbnail import default
 from sorl.thumbnail.base import ThumbnailBackend
 from sorl.thumbnail.conf import settings
+from sorl.thumbnail.engines.pil_engine import Engine as PILEngine
 from sorl.thumbnail.helpers import get_module_class
 from sorl.thumbnail.images import ImageFile
 from sorl.thumbnail.parsers import parse_geometry
 from sorl.thumbnail.templatetags.thumbnail import margin
-from sorl.thumbnail.engines.pil_engine import Engine as PILEngine
+
 from .models import Item
 from .utils import BaseTestCase
-
-
-pytestmark = pytest.mark.django_db
 
 
 class SimpleTestCase(BaseTestCase):
@@ -61,6 +58,15 @@ class SimpleTestCase(BaseTestCase):
         t = self.BACKEND.get_thumbnail(item.image, '400x300', crop='center', upscale=True)
         self.assertEqual(t.x, 400)
         self.assertEqual(t.y, 300)
+
+    @unittest.skipIf('pil_engine' not in settings.THUMBNAIL_ENGINE, 'blur is only supported in PIL')
+    def test_crop_and_blur(self):
+        item = Item.objects.get(image='200x100.jpg')
+
+        t = self.BACKEND.get_thumbnail(item.image, '100x100', crop="center", blur='3')
+
+        self.assertEqual(t.x, 100)
+        self.assertEqual(t.y, 100)
 
     def test_kvstore(self):
         im = ImageFile(Item.objects.get(image='500x500.jpg').image)

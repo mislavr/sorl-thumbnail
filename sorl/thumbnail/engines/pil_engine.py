@@ -3,11 +3,12 @@ from io import BytesIO
 from sorl.thumbnail.engines.base import EngineBase
 
 try:
-    from PIL import Image, ImageFile, ImageDraw, ImageFilter, ImageMode
+    from PIL import Image, ImageDraw, ImageFile, ImageMode
+    from PIL.ImageFilter import GaussianBlur
 except ImportError:
     import Image
-    import ImageFile
     import ImageDraw
+    import ImageFile
     import ImageMode
 
 if hasattr(Image, 'Resampling'):
@@ -36,7 +37,7 @@ def color_count(image):
 
 def histogram_entropy_py(image):
     """ Calculate the entropy of an images' histogram. """
-    from math import log2, fsum
+    from math import fsum, log2
     histosum = float(color_count(image))
     histonorm = (histocol / histosum for histocol in image.histogram())
     return -fsum(p * log2(p) for p in histonorm if p != 0.0)
@@ -66,16 +67,6 @@ def round_rectangle(size, radius, fill):
     rectangle.paste(corner.rotate(180), (width - radius, height - radius))
     rectangle.paste(corner.rotate(270), (width - radius, 0))
     return rectangle
-
-
-class GaussianBlur(ImageFilter.Filter):
-    name = "GaussianBlur"
-
-    def __init__(self, radius=2):
-        self.radius = radius
-
-    def filter(self, image):
-        return image.gaussian_blur(self.radius)
 
 
 class Engine(EngineBase):

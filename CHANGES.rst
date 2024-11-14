@@ -2,6 +2,21 @@
 Changes
 =======
 
+Unreleased
+==========
+* ``THUMBNAIL_STORAGE`` should now be an alias in the Django ``STORAGES`` setting.
+  The old way of specifying a dotted path to a Storage module is still supported.
+* Confirmed support for Python 3.13 (on Django 5.1+).
+* Drop support for Python 3.8.
+
+12.11.0
+=======
+* Deprecated ``THUMBNAIL_KVSTORE``. Only the Django cache-based store will be
+  used in a future version.
+* Add support for Django 5.0 and 5.1
+* Add support for installing with optional dependencies.
+* Drop support for Django 3.2, 4.0 and 4.1
+
 12.10.0
 =======
 * Fixed safe_filter application on various thumbnail template tags.
